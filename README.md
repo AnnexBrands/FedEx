@@ -101,6 +101,20 @@ with FedExClient.from_env() as fedex:
     response = fedex.rate_quotes(rate_request)
 ```
 
+To keep quoted == booked, derive the rate request from the exact payload you
+will send to `create_shipment`, and flatten the reply for comparison:
+
+```python
+from fedex_sdk import extract_rate_options
+
+with FedExClient.from_env() as fedex:
+    response = fedex.rate_from_ship_payload(shipment_payload)          # rate the pinned service
+    shopped = fedex.rate_from_ship_payload(shipment_payload, all_services=True)
+
+for option in extract_rate_options(response.data):
+    print(option["serviceType"], option["totalNetCharge"], option["transitDays"])
+```
+
 ## Shipments
 
 ```python
@@ -192,6 +206,21 @@ with FedExClient.from_env() as fedex:
     response = fedex.validate_addresses(payload)
 ```
 
+Or validate a single Ship-shaped address and get a decision-ready summary:
+
+```python
+from fedex_sdk import first_resolved_address
+
+with FedExClient.from_env() as fedex:
+    response = fedex.validate_address(
+        {"streetLines": ["22 Blyth Hill Rd"], "city": "Toronto",
+         "stateOrProvinceCode": "ON", "postalCode": "M4N 3L6", "countryCode": "CA"}
+    )
+
+resolved = first_resolved_address(response.data)
+print(resolved["classification"], resolved["matched"], resolved["postalCode"])
+```
+
 ## Locations and Pickups
 
 ```python
@@ -200,6 +229,31 @@ with FedExClient.from_env() as fedex:
     availability = fedex.pickup_availability(availability_request)
     pickup = fedex.create_pickup(pickup_request)
     cancellation = fedex.cancel_pickup(cancel_pickup_request)
+```
+
+Builder-backed conveniences (Express `FDXE` and Ground `FDXG` are separate
+pickup networks — match the carrier code to the service being shipped):
+
+```python
+from fedex_sdk import extract_pickup_confirmation
+
+with FedExClient.from_env() as fedex:
+    availability = fedex.check_pickup_availability(
+        {"postalCode": "30062", "countryCode": "US"},
+        carriers=["FDXG"], dispatch_date="2026-07-06",
+    )
+    pickup = fedex.schedule_pickup(
+        pickup_contact={"personName": "Navis 23030GA", "phoneNumber": "4049997225"},
+        pickup_address={"streetLines": ["1061 Triad Ct"], "city": "Marietta",
+                        "stateOrProvinceCode": "GA", "postalCode": "30062", "countryCode": "US"},
+        ready_timestamp="2026-07-06T09:00:00Z",
+        carrier_code="FDXG", package_count=1, total_weight_lb=7,
+    )
+    confirmation = extract_pickup_confirmation(pickup.data)
+    cancelled = fedex.cancel_scheduled_pickup(
+        confirmation_code=confirmation["confirmationCode"],
+        scheduled_date="2026-07-06", carrier_code="FDXG",
+    )
 ```
 
 ## Generic Requests
@@ -229,10 +283,12 @@ except FedExAPIError as exc:
 - `get_access_token(force_refresh=False)`
 - `track_by_tracking_numbers(...)`
 - `rate_quotes(payload)`
+- `rate_from_ship_payload(ship_payload, all_services=False)`
 - `create_shipment(payload)`
 - `validate_shipment(payload)`
 - `cancel_shipment(payload)`
 - `validate_addresses(payload)`
+- `validate_address(address)`
 - `upload_etd_document(document, attachment, ...)`
 - `upload_commercial_invoice(attachment, ...)`
 - `upload_post_shipment_commercial_invoice(attachment, ...)`
@@ -240,9 +296,9 @@ except FedExAPIError as exc:
 - `uploaded_document_id(response)`
 - `with_pre_shipment_documents(shipment_payload, documents, ...)`
 - `find_locations(payload)`
-- `pickup_availability(payload)`
-- `create_pickup(payload)`
-- `cancel_pickup(payload)`
+- `pickup_availability(payload)` / `check_pickup_availability(address, ...)`
+- `create_pickup(payload)` / `schedule_pickup(...)`
+- `cancel_pickup(payload)` / `cancel_scheduled_pickup(...)`
 - `get(path, query=...)`, `post(path, payload)`, and `request(...)`
 
 ## Development

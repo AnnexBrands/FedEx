@@ -1,10 +1,31 @@
 from __future__ import annotations
 
+import gzip
 import json
 import urllib.error
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from typing import Mapping, Optional, Protocol
+
+
+def decode_response_body(raw: bytes, headers: Mapping[str, str]) -> str:
+    """Decode a response body, decompressing first when the server compressed it.
+
+    The FedEx document API (documentapi.prod.fedex.com) gzips responses even
+    when the request sends no Accept-Encoding, so the magic-byte sniff backs up
+    the Content-Encoding header rather than trusting either alone.
+    """
+    encoding = ""
+    for name, value in headers.items():
+        if name.lower() == "content-encoding":
+            encoding = (value or "").lower()
+            break
+    if encoding == "gzip" or raw[:2] == b"\x1f\x8b":
+        raw = gzip.decompress(raw)
+    elif encoding == "deflate":
+        raw = zlib.decompress(raw)
+    return raw.decode("utf-8")
 
 
 @dataclass(frozen=True)
@@ -55,17 +76,19 @@ class UrlLibTransport:
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as response:
-                payload = response.read().decode("utf-8")
+                headers_map = dict(response.headers.items())
+                payload = decode_response_body(response.read(), headers_map)
                 return HttpResponse(
                     status_code=response.status,
-                    headers=dict(response.headers.items()),
+                    headers=headers_map,
                     text=payload,
                 )
         except urllib.error.HTTPError as exc:
-            payload = exc.read().decode("utf-8")
+            headers_map = dict(exc.headers.items())
+            payload = decode_response_body(exc.read(), headers_map)
             return HttpResponse(
                 status_code=exc.code,
-                headers=dict(exc.headers.items()),
+                headers=headers_map,
                 text=payload,
             )
 

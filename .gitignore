@@ -4,3 +4,5 @@ __pycache__/
 *.env
 src/.env
 *:Zone.Identifier
+*.egg-info/
+__pycache__/
