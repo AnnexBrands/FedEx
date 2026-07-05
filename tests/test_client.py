@@ -59,6 +59,17 @@ class FedExClientTests(unittest.TestCase):
             account_number="123456789",
         )
 
+    def test_repr_never_exposes_secrets(self):
+        config = FedExConfig(
+            client_id="cid-visible",
+            client_secret="SECRET-VALUE",
+            child_secret="CHILD-SECRET",
+        )
+        shown = repr(config)
+        self.assertNotIn("SECRET-VALUE", shown)
+        self.assertNotIn("CHILD-SECRET", shown)
+        self.assertIn("cid-visible", shown)
+
     def test_oauth_token_is_requested_and_cached(self):
         transport = FakeTransport(
             [

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Optional, Union
 
@@ -18,7 +18,8 @@ class FedExConfig:
     """Configuration for the FedEx REST API client."""
 
     client_id: str
-    client_secret: str
+    # Secrets carry repr=False so a logged/raised config never prints them.
+    client_secret: str = field(repr=False)
     account_number: Optional[str] = None
     environment: Environment = "sandbox"
     base_url: Optional[str] = None
@@ -27,7 +28,7 @@ class FedExConfig:
     user_agent: str = "fedex-api-sdk-python/0.1.0"
     grant_type: str = "client_credentials"
     child_key: Optional[str] = None
-    child_secret: Optional[str] = None
+    child_secret: Optional[str] = field(default=None, repr=False)
     token_refresh_margin: int = 60
 
     @property
